@@ -13,4 +13,3 @@ aws_secret_access_key = os.getenv('aws_secret_access_key')
 client = motor.motor_asyncio.AsyncIOMotorClient(
     f"mongodb+srv://{db_username}:{db_password}@money-management.xbv9d.mongodb.net/?retryWrites=true&w=majority", tls=True, tlsAllowInvalidCertificates=True)
 db = client['money-management']
-# mongodb+srv://danbeaumont95:<password>@money-management.xbv9d.mongodb.net/?retryWrites=true&w=majority
