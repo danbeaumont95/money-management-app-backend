@@ -4,9 +4,6 @@ from .routers import user
 app = FastAPI()
 origins = ["*"]
 app.include_router(user.router)
-# app.include_router(item.router)
-# app.include_router(basket.router)
-# app.include_router(address.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
