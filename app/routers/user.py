@@ -60,9 +60,16 @@ async def save_token_in_db(token: SessionModel = Body(...), id: str = Body(...))
     token = jsonable_encoder(token)
     userId = jsonable_encoder(id)
     insert_obj = {"token": token, "userId": userId}
-    new_token = await db['user-sessions'].insert_one(jsonable_encoder(insert_obj))
-    created_token = await db['user-sessions'].find_one({"_id": new_token.inserted_id})
-    return created_token
+    already_in_db = await db['user-sessions'].find_one({"userId": userId})
+
+    if already_in_db is None:
+        new_token = await db['user-sessions'].insert_one(jsonable_encoder(insert_obj))
+        created_token = await db['user-sessions'].find_one({"_id": new_token.inserted_id})
+        return created_token
+    else:
+        await db['user-sessions'].update_one({"userId": userId}, {"$set": {
+            "token": insert_obj['token']
+        }})
 
 
 async def get_user(email):
