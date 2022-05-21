@@ -12,6 +12,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# source ./django_env/bin/activate
+
 
 @app.get("/")
 async def root():
