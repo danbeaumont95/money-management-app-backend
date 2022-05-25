@@ -12,6 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# uvicorn app.main:app --reload
 # source ./django_env/bin/activate
 
 

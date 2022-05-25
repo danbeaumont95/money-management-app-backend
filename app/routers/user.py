@@ -8,9 +8,13 @@ from ..db import db, jwt_algorithm, jwt_secret
 from email_validator import validate_email, EmailNotValidError
 from fastapi.responses import JSONResponse
 from collections import namedtuple
-
+from flask import jsonify
+import requests
 import base64
-
+import os
+import json
+# from plaid import Client
+# from plaid.model.link_token_create_request import LinkTokenCreateRequest
 router = APIRouter(
     prefix="/user",
     tags=['user']
@@ -137,3 +141,38 @@ async def login(user: UserLoginSchema = Body(...)):
     return {
         "error": "Wrong login details"
     }
+
+
+@router.get('/getLinkToken')
+async def getPlaidLinkToken(request: Request):
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        user_id = isAllowed['user_id']
+        plaid_client_id = os.getenv('plaid_client_id')
+        secret = os.getenv('plaid_development_secret')
+        data = {
+            'client_id': plaid_client_id,
+            'secret': secret,
+            'client_name': 'Dans app',
+            'country_codes': ['gb'],
+            'language': 'en',
+            'user': {
+                'client_user_id': user_id,
+            },
+            'products': ['auth']
+        }
+        token = requests.post(
+            'https://development.plaid.com/link/token/create', data=json.dumps(data), headers={'Content-type': 'application/json'})
+
+        jsonified = json.loads(token.text)
+        if jsonified['link_token']:
+            return JSONResponse(status_code=status.HTTP_201_CREATED, content={'token': jsonified['link_token']})
+        else:
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={'error': 'Error getting token'})
+    else:
+        return {"error": "Unable to verify, please log in again"}
