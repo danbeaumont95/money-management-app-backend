@@ -176,3 +176,75 @@ async def getPlaidLinkToken(request: Request):
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={'error': 'Error getting token'})
     else:
         return {"error": "Unable to verify, please log in again"}
+
+
+@router.post('/exchangePublicToken')
+async def exchange_public_token_for_access_token(request: Request, public_token=Body(...)):
+
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        plaid_client_id = os.getenv('plaid_client_id')
+        secret = os.getenv('plaid_development_secret')
+        data = {
+            'client_id': plaid_client_id,
+            'secret': secret,
+            'public_token': public_token['public_token']
+        }
+        try:
+
+            access_token = requests.post(
+                'https://development.plaid.com/item/public_token/exchange', data=json.dumps(data), headers={'Content-type': 'application/json'})
+
+            jsonified = json.loads(access_token.text)
+
+            access = jsonified['access_token']
+
+            # decoded = base64.b64decode(encoded)
+
+            new_access_token = access.encode("utf-8")
+
+            encoded = base64.b64encode(new_access_token)
+
+            user_id = isAllowed['user_id']
+            insert_obj = {
+                "token": str(encoded, 'utf-8'), "userId": user_id}
+            already_has_access_token = await db['plaidAccessTokens'].find_one({"userId": user_id})
+
+            if already_has_access_token is None:
+
+                await db['plaidAccessTokens'].insert_one(jsonable_encoder(insert_obj))
+            else:
+                await db['plaidAccessTokens'].update_one({"userId": user_id}, {"$set": {
+                    "token": str(encoded, 'utf-8')
+                }})
+
+            return {"accessToken": str(encoded, 'utf-8')}
+        except:
+            return {"error": "Unable to link accounts"}
+    else:
+        return {"error": "Unable to verify, please log in again"}
+
+
+@router.get('/decodeAccessToken')
+async def exchange_public_token_for_access_token(request: Request):
+
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        user_id = isAllowed['user_id']
+        token = await db['plaidAccessTokens'].find_one({"userId": user_id})
+
+        decoded = base64.b64decode(token['token'])
+
+        return {"token": decoded}
+    else:
+        return {"error": "Unable to verify, please log in again"}
