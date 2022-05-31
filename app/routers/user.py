@@ -9,6 +9,9 @@ from email_validator import validate_email, EmailNotValidError
 from fastapi.responses import JSONResponse
 from collections import namedtuple
 from flask import jsonify
+from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
+
 import requests
 import base64
 import os
@@ -250,8 +253,19 @@ async def exchange_public_token_for_access_token(request: Request):
         return {"error": "Unable to verify, please log in again"}
 
 
-@router.get('/getTransactions')
-async def get_all_transactions(request: Request):
+@router.get('/getTransactions/{time}')
+async def get_all_transactions(request: Request, time: str):
+
+    today = datetime.today().strftime('%Y-%m-%d')
+
+    if time == 'day':
+        start_date = date.today() + relativedelta(days=-1)
+    if time == 'week':
+        start_date = date.today() + relativedelta(weeks=-1)
+    if time == 'month':
+        start_date = date.today() + relativedelta(months=-1)
+    if time == 'year':
+        start_date = date.today() + relativedelta(years=-1)
 
     bearer_token = request.headers.get('authorization')
 
@@ -273,8 +287,8 @@ async def get_all_transactions(request: Request):
             'client_id': plaid_client_id,
             'secret': secret,
             'access_token': plaid_access_token,
-            'start_date': '2022-04-01',
-            'end_date': '2022-05-01'
+            'start_date': str(start_date),
+            'end_date': today
         }
         if token is None:
             return {"message": "No linked accounts"}
