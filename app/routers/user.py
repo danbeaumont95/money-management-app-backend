@@ -248,3 +248,41 @@ async def exchange_public_token_for_access_token(request: Request):
         return {"token": decoded}
     else:
         return {"error": "Unable to verify, please log in again"}
+
+
+@router.get('/getTransactions')
+async def get_all_transactions(request: Request):
+
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        user_id = isAllowed['user_id']
+        token = await db['plaidAccessTokens'].find_one({"userId": user_id})
+
+        decoded = base64.b64decode(token['token'])
+
+        plaid_access_token = decoded.decode("utf-8")
+
+        plaid_client_id = os.getenv('plaid_client_id')
+        secret = os.getenv('plaid_development_secret')
+        data = {
+            'client_id': plaid_client_id,
+            'secret': secret,
+            'access_token': plaid_access_token,
+            'start_date': '2022-04-01',
+            'end_date': '2022-05-01'
+        }
+        if token is None:
+            return {"message": "No linked accounts"}
+        res = requests.post('https://development.plaid.com/transactions/get',
+                            data=json.dumps(data), headers={'Content-type': 'application/json'})
+        all_transaction_info = json.loads(res.text)
+        transactions = all_transaction_info['transactions']
+
+        return {"transactions": transactions}
+    else:
+        return {"error": "Unable to verify, please log in again"}
