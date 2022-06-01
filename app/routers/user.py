@@ -85,6 +85,37 @@ async def get_user(email):
     raise HTTPException(status_code=404, detail=f"User {id} not found")
 
 
+def new_token_response(access_token: str):
+    return {
+        "access_token": access_token
+    }
+
+
+def sign_new_jwt(user_id: str) -> Dict[str, str]:
+    access_payload = {
+        "user_id": user_id,
+        "expires": time.time() + 600
+    }
+    access_token = jwt.encode(
+        access_payload, jwt_secret, algorithm=jwt_algorithm)
+    return new_token_response(access_token)
+
+
+async def reIssueAccessToken(token):
+
+    def decodeJWT(token: str) -> dict:
+        decoded_token = jwt.decode(
+            token, jwt_secret, algorithms=[jwt_algorithm])
+        return decoded_token if decoded_token['expires'] <= time.time() else None
+
+    new_decoded = decodeJWT(token)
+
+    new_token = sign_new_jwt(new_decoded['user_id'])
+
+    await save_token_in_db(new_token, str(new_decoded['user_id']))
+    return new_token
+
+
 @router.post('/', tags=['user'])
 async def create_user(user: UserModel = Body(...)):
     user = jsonable_encoder(user)
@@ -294,9 +325,68 @@ async def get_all_transactions(request: Request, time: str):
             return {"message": "No linked accounts"}
         res = requests.post('https://development.plaid.com/transactions/get',
                             data=json.dumps(data), headers={'Content-type': 'application/json'})
+        print(res.text, 'res')
         all_transaction_info = json.loads(res.text)
+        if 'error_code' in all_transaction_info:
+            return {"error": "Need to link account again"}
         transactions = all_transaction_info['transactions']
 
         return {"transactions": transactions}
     else:
         return {"error": "Unable to verify, please log in again"}
+
+
+@router.get('/linkedAccounts')
+async def get_all_transactions(request: Request):
+
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        user_id = isAllowed['user_id']
+        token = await db['plaidAccessTokens'].find_one({"userId": user_id})
+
+        decoded = base64.b64decode(token['token'])
+
+        plaid_access_token = decoded.decode("utf-8")
+
+        plaid_client_id = os.getenv('plaid_client_id')
+        secret = os.getenv('plaid_development_secret')
+        data = {
+            'client_id': plaid_client_id,
+            'secret': secret,
+            'access_token': plaid_access_token,
+        }
+        if token is None:
+            return {"message": "No linked accounts"}
+        res = requests.post('https://development.plaid.com/accounts/get',
+                            data=json.dumps(data), headers={'Content-type': 'application/json'})
+        print(res.text, 'text')
+        jsonified = json.loads(res.text)
+
+        accounts = jsonified['accounts']
+        return {"accounts": accounts}
+    else:
+        return {"error": "Unable to verify, please log in again"}
+
+
+@router.post('/refreshToken', tags=['user'], response_description="Returns a new access token if original access token has expired")
+async def refresh_token(request: Request):
+
+    refresh_token = request.headers.get('x-refresh')
+
+    bearer_token = request.headers.get('authorization')
+
+    if refresh_token is None or bearer_token is None:
+        return {"error": "Missing token"}
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is None and refresh_token:
+        new_access_token = await reIssueAccessToken(access_token)
+        return new_access_token
