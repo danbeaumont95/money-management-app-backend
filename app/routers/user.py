@@ -16,8 +16,7 @@ import requests
 import base64
 import os
 import json
-# from plaid import Client
-# from plaid.model.link_token_create_request import LinkTokenCreateRequest
+
 router = APIRouter(
     prefix="/user",
     tags=['user']
