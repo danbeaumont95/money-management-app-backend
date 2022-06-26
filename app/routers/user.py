@@ -307,6 +307,9 @@ async def get_all_transactions(request: Request, time: str):
         user_id = isAllowed['user_id']
         token = await db['plaidAccessTokens'].find_one({"userId": user_id})
 
+        if token is None:
+            return {"message": "No linked accounts"}
+
         decoded = base64.b64decode(token['token'])
 
         plaid_access_token = decoded.decode("utf-8")
@@ -324,7 +327,7 @@ async def get_all_transactions(request: Request, time: str):
             return {"message": "No linked accounts"}
         res = requests.post('https://development.plaid.com/transactions/get',
                             data=json.dumps(data), headers={'Content-type': 'application/json'})
-        print(res.text, 'res')
+
         all_transaction_info = json.loads(res.text)
         if 'error_code' in all_transaction_info:
             return {"error": "Need to link account again"}
@@ -363,7 +366,7 @@ async def get_all_transactions(request: Request):
             return {"message": "No linked accounts"}
         res = requests.post('https://development.plaid.com/accounts/get',
                             data=json.dumps(data), headers={'Content-type': 'application/json'})
-        print(res.text, 'text')
+
         jsonified = json.loads(res.text)
 
         accounts = jsonified['accounts']
@@ -389,3 +392,4 @@ async def refresh_token(request: Request):
     if isAllowed is None and refresh_token:
         new_access_token = await reIssueAccessToken(access_token)
         return new_access_token
+    return
