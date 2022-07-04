@@ -170,7 +170,13 @@ async def login(user: UserLoginSchema = Body(...)):
         token = signJWT(user_id)
 
         await save_token_in_db(token, str(user_id))
-        return token
+        return_obj = {
+            'user_id': user_id,
+            'access_token': token['access_token'],
+            'refresh_token': token['refresh_token']
+        }
+
+        return return_obj
     return {
         "error": "Wrong login details"
     }
@@ -393,3 +399,18 @@ async def refresh_token(request: Request):
         new_access_token = await reIssueAccessToken(access_token)
         return new_access_token
     return
+
+
+@router.get('/getMe', tags=['user'], response_description="Returns logged in users details")
+async def get_my_details(request: Request):
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        user_id = isAllowed['user_id']
+        user = await db['users'].find_one({"_id": user_id})
+        return user
+    return {"error": "Unable to verify, please log in again"}
