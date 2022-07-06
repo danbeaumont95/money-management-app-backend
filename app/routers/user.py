@@ -11,6 +11,7 @@ from collections import namedtuple
 from flask import jsonify
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
+from operator import itemgetter
 
 import requests
 import base64
@@ -413,4 +414,34 @@ async def get_my_details(request: Request):
         user_id = isAllowed['user_id']
         user = await db['users'].find_one({"_id": user_id})
         return user
+    return {"error": "Unable to verify, please log in again"}
+
+
+@router.patch('/updateMyDetails', tags=['user'], response_description="Updates logged in users details")
+async def update_my_details(request: Request, user_details=Body(...)):
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        user_id = isAllowed['user_id']
+        firstName, lastName, email, mobileNumber, username, password = itemgetter(
+            'firstName', 'lastName', 'email', 'mobileNumber', 'username', 'password')(user_details)
+
+        encoded_password = password.encode("utf-8")
+        encoded = base64.b64encode(encoded_password)
+
+        new_password = str(encoded, 'utf-8')
+
+        await db['users'].update_one({"_id": user_id}, {"$set": {
+            "firstName": firstName,
+            "lastName": lastName,
+            "email": email,
+            "mobileNumber": mobileNumber,
+            "username": username,
+            "password": new_password
+        }})
+        return {'message': 'Details updated'}
     return {"error": "Unable to verify, please log in again"}
