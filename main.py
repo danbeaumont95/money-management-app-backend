@@ -1,4 +1,5 @@
 # from app.routers import user
+from app.routers import user
 from fastapi.testclient import TestClient
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
@@ -9,7 +10,7 @@ print('hello')
 
 app = FastAPI()
 origins = ["*"]
-# app.include_router(user.router)
+app.include_router(user.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
