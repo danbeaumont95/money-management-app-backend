@@ -2,6 +2,7 @@
 from fastapi.testclient import TestClient
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
+from app.db import db
 import uvicorn
 print('hello')
 # from routers import user
@@ -23,3 +24,9 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "money-management api V0.0.1!"}
+
+
+@app.get('/allUsers')
+async def get_all_users():
+    all = all_users = await db['users'].find({}, {"password": 0}).to_list(1000)
+    return all
