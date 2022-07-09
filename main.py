@@ -1,4 +1,4 @@
-from .app.routers import user
+from app.routers import user
 from fastapi.testclient import TestClient
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
