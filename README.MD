@@ -18,4 +18,4 @@ The aim of this app was to create a money management app not just for myself, bu
 
 Link to hosted API: https://dans-money-backend.herokuapp.com/
 
-Link to hosted Frontend: coming soon...
+Link to hosted Frontend: https://dans-money.web.app/
