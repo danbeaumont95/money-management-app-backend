@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from app.db import db
 import uvicorn
 # from routers import user
+# uvicorn main:app --reload
 
 app = FastAPI()
 origins = ["*"]
