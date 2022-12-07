@@ -12,11 +12,13 @@ from flask import jsonify
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from operator import itemgetter
-
+import boto3
 import requests
 import base64
 import os
 import json
+from botocore.exceptions import ClientError
+from fastapi import UploadFile, File
 
 router = APIRouter(
     prefix="/user",
@@ -144,6 +146,8 @@ async def create_user(user: UserModel = Body(...)):
 
         created_user = await db['users'].find_one({"email": user['email']})
 
+        await db['userImagesModel'].insert_one({'userId': user['_id'], 'images': []})
+
         return JSONResponse(status_code=status.HTTP_201_CREATED, content=created_user)
     except EmailNotValidError as e:
         return {"error": str(e)}
@@ -204,7 +208,8 @@ async def getPlaidLinkToken(request: Request):
             'user': {
                 'client_user_id': user_id,
             },
-            'products': ['auth']
+            # 'products': ['auth']
+            'products': ['auth', 'transactions']
         }
         token = requests.post(
             'https://development.plaid.com/link/token/create', data=json.dumps(data), headers={'Content-type': 'application/json'})
@@ -336,6 +341,7 @@ async def get_all_transactions(request: Request, time: str):
                             data=json.dumps(data), headers={'Content-type': 'application/json'})
 
         all_transaction_info = json.loads(res.text)
+        print(all_transaction_info, 'all_transaction_info123')
         if 'error_code' in all_transaction_info:
             return {"error": "Need to link account again"}
         transactions = all_transaction_info['transactions']
@@ -445,3 +451,92 @@ async def update_my_details(request: Request, user_details=Body(...)):
         }})
         return {'message': 'Details updated'}
     return {"error": "Unable to verify, please log in again"}
+
+
+@router.post('/uploadImage', tags=['user'], response_description='uploads an image')
+async def update_user_image(request: Request, fileobject: UploadFile = File(...)):
+    print(request, 'reww')
+    bearer_token = request.headers.get('authorization')
+
+    access_token = bearer_token[7:]
+
+    isAllowed = decodeJWT(access_token)
+
+    if isAllowed is not None:
+        filename = fileobject.filename
+
+        current_time = datetime.now()
+        split_file_name = os.path.splitext(filename)
+
+        file_name_unique = str(current_time.timestamp()).replace('.', '')
+
+        file_extension = split_file_name[1]  # file extention
+
+        data = fileobject.file._file  # Converting tempfile.SpooledTemporaryFile to io.BytesIO
+
+        uploads3 = await upload_fileobj(
+            data,  'python-e-commerce-app', filename)
+        if uploads3:
+            created_item = {
+                "userId": isAllowed['user_id'], "image": f"https://python-e-commerce-app.s3.eu-west-2.amazonaws.com/{filename}"}
+
+            # new_item = await db['userImagesModel'].insert_one(created_item)
+            test = await db['userImagesModel'].find_one({'userId': isAllowed['user_id']})
+
+            new_item = await db['userImagesModel'].find_one_and_update({'userId': isAllowed['user_id']}, {"$push": {
+                "images": f"https://python-e-commerce-app.s3.eu-west-2.amazonaws.com/{filename}"
+            }})
+
+            """
+            test = await db['addresses'].find_one_and_update({"userId": user_id, "addresses.id": id}, {"$set": {
+                      "addresses.$.firstLine": body['firstLine'],
+                      "addresses.$.secondLine": body['secondLine'],
+                      "addresses.$.TownCity": body['TownCity'],
+                      "addresses.$.Postcode": body['Postcode'],
+                      "addresses.$.Country": body['Country']
+                  }})
+
+
+
+            """
+
+            return {"status": True, "message": "Item inserted in DB"}
+        else:
+            raise HTTPException(
+                status_code=400, detail="Failed to upload in S3")
+    else:
+        return {
+            "Message": "Token expired, please log in again"
+        }
+
+
+async def upload_fileobj(file_name, bucket, key):
+
+    """Upload a file to an S3 bucket
+    :param key:
+    :param file_name: File to upload
+    :param bucket: Bucket to upload to
+    :return: True if file was uploaded, else False
+    """
+
+    # If S3 object_name was not specified, use file_name
+    if (key is None) or (bucket is None):
+        print("key and bucket cannot be None")
+        return False
+
+    # Upload the file
+    s3_client = boto3.client('s3')
+
+    try:
+
+        response = s3_client.upload_fileobj(
+            file_name, bucket, key, ExtraArgs={'ACL': 'public-read'})
+
+    except ClientError as e:
+        print("INFO: Failed to upload image")
+        print(e)
+        return False
+
+    print(
+        "File object uploaded to https://s3.amazonaws.com/{}{}".format(bucket, key))
+    return True
